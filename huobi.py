@@ -1,11 +1,17 @@
 #coding=utf-8
 from Util import *
 
-def get_kline(unit):
-	r = requests.get(url='http://api.huobi.com/staticmarket/btc_kline_'+interval[unit]+'_json.js')
-	if r.status_code==200:
-		return r.text
+def get_real_chart():
+    while True:
+        r=requests.get(url='http://api.huobi.com/staticmarket/ticker_btc_json.js')
+        if r.status_code==200:
+            return r.text
 
+def get_kline(unit,length=5):
+    while True:
+        r = requests.get(url='http://api.huobi.com/staticmarket/btc_kline_'+interval[unit]+'_json.js?length='+str(length))
+        if r.status_code==200:
+            return r.text
 '''
 获取账号详情
 '''

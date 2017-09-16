@@ -10,6 +10,7 @@ import huobi
 import json
 import os
 import time
+import math
 
 def get_money_in_order():
     orders=json.loads(huobi.getOrders(1,GET_ORDERS));
@@ -66,30 +67,59 @@ def sell_retry(sell_price,sell_num):
             os._exit(0);
         if sell_ret["result"]=="success":
             print("[sell] price:",sell_price," btc_num:",sell_num);
-            return buy_ret["id"];
+            return sell_ret["id"];
         if try_count>5:
             print("can't sell,will quit soon!");
             os._exit(0);
 
+def can_buy(cur_price):
+    kline=json.loads(huobi.get_kline("1min"));
+    for i in range(0,len(kline)-1):
+        if cur_price<kline[i][2]:
+            return False;
+    return True;
+
+def can_sell(cur_price):
+    kline=json.loads(huobi.get_kline("1min",3));
+    for i in range(0,len(kline)-1):
+        if cur_price>kline[i][2]:
+            return False;
+    return True;
+
+def get_lowest_today():
+    chart=json.loads(huobi.get_real_chart());
+    return chart["ticker"]["low"];
+
 if __name__ == "__main__":
-    cost_cny=99.16;
+    cost_cny=100.75;
     trans_cnt=0; 
     have_buy=1;
+    f=0;
     try:
         while trans_cnt<5:
             time.sleep(0.1);
             if have_buy==0:
                 cur_price=float(get_cur_price());
-                if cur_price>float(os.environ["buy_price"]):
-                    print("current price is larger than ",os.environ["buy_price"]);
+                gate=min(get_lowest_today()+500,float(os.environ["buy_price"]));
+                if cur_price>gate:
+                    print(f," current price is larger than ",str(gate));
+                    if cur_price-gate>1000:
+                        print(f," current price is 1000 larger than buy_price,will sleep 5s");
+                        time.sleep(5);
+                    if f==0:f=1;
+                    else:f=0;
                     continue;
+
+                if can_buy(cur_price)==False:
+                    print("Not a buy point");
+                    continue;
+
                 cur_price-=1;
                 cost_cny=float(get_all_money());
                 buy_num=cost_cny/cur_price;
-                buy_num_round=round(buy_num,4);
-                while buy_num_round>buy_num:
-                    buy_num_round-=0.0001;
-                buy_num=buy_num_round;
+                buy_num*=10000;
+                buy_num=math.floor(buy_num);
+                buy_num=round(buy_num/10000,4);
                 if buy_num<0.001:continue;
                 print("[before buy] cur_price:",cur_price," buy_num:",buy_num);
                 buy_retry(cur_price,buy_num);
@@ -103,17 +133,21 @@ if __name__ == "__main__":
                 print("ready to sell");
                 print(cost_cny);
                 cur_price=float(get_cur_price());
+
+                if can_sell(cur_price)==False:
+                    print("Not a sell point");
+                    continue;
+
                 my_btc=float(get_all_btc());
-                my_btc_round=round(my_btc,4);
-                while my_btc_round>my_btc:
-                    my_btc_round-=0.0001;
-                my_btc=my_btc_round;
+                my_btc*=10000;
+                my_btc=math.floor(my_btc);
+                my_btc=round(my_btc/10000,4);
                 if my_btc<0.001:continue;
                 print("all_btc:",my_btc);
                 will_get_cny=my_btc*cur_price*(1.0-0.002);
                 print("will_get_cny:",will_get_cny);
                 print("diff(earn):",will_get_cny-cost_cny);
-                if will_get_cny-cost_cny>0.5:
+                if will_get_cny-cost_cny>-0.2:
                     print("[before sell] cur_price:",cur_price," sell_num:",my_btc);
                     sell_retry(cur_price,my_btc);
                     not_processed=get_money_in_order();
